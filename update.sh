@@ -58,6 +58,6 @@ fi
 
 # ---- Reinstalar (idempotente: hace backup y reinicia servicios) ----
 log "Reinstalando binarios y servicios..."
-bash "$INSTALL_DIR/install.sh" "${@:-}"
+bash "$INSTALL_DIR/install.sh" "$@"
 
 log "Actualización completada a ${REMOTE_HEAD:0:8}."
