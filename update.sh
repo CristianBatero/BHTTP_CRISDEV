@@ -57,6 +57,13 @@ else
 fi
 
 # ---- Reinstalar (idempotente: hace backup y reinicia servicios) ----
+# Cargar puertos por defecto (evitan chocar con SCRIP_BASICA: 22/80/90/110/443/7300)
+if [[ -f "$INSTALL_DIR/ports.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$INSTALL_DIR/ports.env"
+    set +a
+fi
 log "Reinstalando binarios y servicios..."
 bash "$INSTALL_DIR/install.sh" "$@"
 

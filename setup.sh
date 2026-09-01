@@ -72,6 +72,13 @@ else
 fi
 
 # ---- 3. Ejecutar el instalador del paquete (no interactivo si vienen variables) ----
+# Cargar puertos por defecto (evitan chocar con SCRIP_BASICA: 22/80/90/110/443/7300)
+if [[ -f "$INSTALL_DIR/ports.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$INSTALL_DIR/ports.env"
+    set +a
+fi
 log "Ejecutando install.sh del paquete..."
 bash "$INSTALL_DIR/install.sh" "$@"
 
