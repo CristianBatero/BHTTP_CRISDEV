@@ -1,0 +1,17 @@
+[Unit]
+Description=BTUN native TCP and UDP protocol server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/btun/server.env
+ExecStart=/usr/local/lib/btun/btun-server
+Restart=on-failure
+RestartSec=3
+User=root
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

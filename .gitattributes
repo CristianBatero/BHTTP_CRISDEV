@@ -1,0 +1,19 @@
+# Fuerza LF en archivos de texto (clave para despliegue en Linux y para
+# que `sha256sum -c SHA256SUMS` funcione en la VPS)
+* text=auto
+
+*.sh      text eol=lf
+*.go      text eol=lf
+*.md      text eol=lf
+*.service text eol=lf
+*.py      text eol=lf
+*.mod     text eol=lf
+*.txt     text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+README.md      text eol=lf
+SHA256SUMS     text eol=lf
+
+# Binarios (sin conversión de fin de línea)
+bin/**   binary
+*.zip    binary

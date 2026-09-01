@@ -1,0 +1,11 @@
+# BHTTP_CRISDEV — repositorio de instalación/actualización del motor BTUN
+# Archivos de sistema / temporales
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# Artefactos de build locales (no se suben; se suben los binarios compilados estándar)
+build/
+*.zip

@@ -1,0 +1,16 @@
+[Unit]
+Description=Bilola BHTTP Go server
+After=network-online.target ssh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/bilola/bilola-server --listen 0.0.0.0:80,0.0.0.0:53 --target 127.0.0.1:22
+Restart=on-failure
+RestartSec=3
+User=root
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

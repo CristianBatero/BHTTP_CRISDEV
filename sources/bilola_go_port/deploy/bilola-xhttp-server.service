@@ -1,0 +1,16 @@
+[Unit]
+Description=Bilola SSH_XHTTP TLS/HTTP2 server
+After=network-online.target ssh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/bilola/bilola-xhttp-server --listen=0.0.0.0:443 --target=127.0.0.1:22 --btun-hosts=flux.dtmod.shop --auto-hosts=f91gs78otu7k.azion.app --auto-delay=1s --btun-target=127.0.0.1:7300 --tls-cert=/etc/bilola/tls/fullchain.pem --tls-key=/etc/bilola/tls/privkey.pem
+Restart=on-failure
+RestartSec=3
+User=root
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

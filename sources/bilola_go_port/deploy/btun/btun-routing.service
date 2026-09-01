@@ -1,0 +1,14 @@
+[Unit]
+Description=BTUN isolated forwarding and NAT rules
+After=network-online.target btun-protocol.service
+Requires=btun-protocol.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile=-/etc/btun/server.env
+ExecStart=/usr/local/lib/btun/btun-routing start
+ExecStop=/usr/local/lib/btun/btun-routing stop
+
+[Install]
+WantedBy=multi-user.target

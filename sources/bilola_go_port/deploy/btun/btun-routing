@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+action="${1:-}"
+subnet="${BTUN_SUBNET:-10.77.0.0/16}"
+tun_interface="${BTUN_TUN:-btun0}"
+gateway="${BTUN_GATEWAY:-10.77.0.1/16}"
+wan_interface="${BTUN_WAN_INTERFACE:-}"
+
+if [[ -z "$wan_interface" ]]; then
+    wan_interface="$(ip -4 route show default | awk '/default/ {for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
+fi
+if [[ -z "$wan_interface" ]]; then
+    echo "could not detect WAN interface; set BTUN_WAN_INTERFACE" >&2
+    exit 1
+fi
+
+add_rule() {
+    if ! iptables -t nat -C POSTROUTING -s "$subnet" -o "$wan_interface" \
+            -j MASQUERADE 2>/dev/null; then
+        iptables -t nat -A POSTROUTING -s "$subnet" -o "$wan_interface" \
+            -j MASQUERADE
+    fi
+    if ! iptables -C FORWARD -i "$tun_interface" -o "$wan_interface" -j ACCEPT \
+            2>/dev/null; then
+        iptables -A FORWARD -i "$tun_interface" -o "$wan_interface" -j ACCEPT
+    fi
+    if ! iptables -C FORWARD -i "$wan_interface" -o "$tun_interface" \
+            -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
+        iptables -A FORWARD -i "$wan_interface" -o "$tun_interface" \
+            -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+    fi
+}
+
+delete_rule() {
+    iptables -t nat -D POSTROUTING -s "$subnet" -o "$wan_interface" \
+        -j MASQUERADE 2>/dev/null || true
+    iptables -D FORWARD -i "$tun_interface" -o "$wan_interface" -j ACCEPT \
+        2>/dev/null || true
+    iptables -D FORWARD -i "$wan_interface" -o "$tun_interface" \
+        -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT \
+        2>/dev/null || true
+}
+
+case "$action" in
+    start)
+        for _ in $(seq 1 100); do
+            if ip link show "$tun_interface" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.1
+        done
+        if ! ip link show "$tun_interface" >/dev/null 2>&1; then
+            echo "TUN interface $tun_interface was not created" >&2
+            exit 1
+        fi
+        ip address replace "$gateway" dev "$tun_interface"
+        ip link set dev "$tun_interface" mtu 1400 up
+        sysctl -w net.ipv4.ip_forward=1 >/dev/null
+        add_rule
+        ;;
+    stop)
+        delete_rule
+        ;;
+    *)
+        echo "usage: $0 start|stop" >&2
+        exit 2
+        ;;
+esac

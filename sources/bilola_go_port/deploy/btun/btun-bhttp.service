@@ -1,0 +1,20 @@
+[Unit]
+Description=BTUN isolated BHTTP stream transport
+After=network-online.target btun-protocol.service
+Wants=network-online.target
+Requires=btun-protocol.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/btun/bilola-server \
+    --listen 0.0.0.0:7080 \
+    --target 127.0.0.1:7300
+Restart=on-failure
+RestartSec=3
+User=root
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+

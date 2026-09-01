@@ -1,0 +1,322 @@
+#!/usr/bin/env bash
+set -u
+
+readonly SERVICE="bilola-go-server.service"
+readonly BINARY="/usr/local/lib/bilola/bilola-server"
+readonly COMMAND_PATH="/usr/local/bin/bhttp"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly CYAN='\033[0;36m'
+readonly NC='\033[0m'
+
+require_root() {
+    if (( EUID != 0 )); then
+        printf '%b\n' "${RED}Execute este comando como root.${NC}" >&2
+        exit 1
+    fi
+}
+
+pause() {
+    printf '\n'
+    read -r -p "Pressione Enter para continuar..." _
+}
+
+service_state() {
+    if systemctl is-active --quiet "$SERVICE"; then
+        printf '%b' "${GREEN}ONLINE${NC}"
+    else
+        printf '%b' "${RED}OFFLINE${NC}"
+    fi
+}
+
+cpu_usage() {
+    LC_ALL=C top -bn1 2>/dev/null |
+        awk '/^%Cpu/ {printf "%.1f", 100 - $8; found=1; exit} END {if (!found) printf "N/D"}'
+}
+
+ssh_connections() {
+    ps -eo user=,pid=,args= |
+        awk '$3 ~ /^sshd:/ && $1 != "root" {count++} END {print count+0}'
+}
+
+valid_username() {
+    [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+}
+
+create_user() {
+    local username password days expiry
+    printf '%b\n' "${CYAN}--- Adicionar novo usuário SSH ---${NC}"
+    read -r -p "Nome de usuário: " username
+
+    if ! valid_username "$username"; then
+        printf '%b\n' "${RED}Nome inválido. Use letras minúsculas, números, _ ou -.${NC}"
+        return
+    fi
+    if id "$username" >/dev/null 2>&1; then
+        printf '%b\n' "${RED}O usuário '$username' já existe.${NC}"
+        return
+    fi
+
+    read -r -s -p "Senha: " password
+    printf '\n'
+    if [[ -z "$password" || "$password" == *:* ]]; then
+        printf '%b\n' "${RED}A senha não pode estar vazia nem conter dois-pontos.${NC}"
+        return
+    fi
+    read -r -p "Dias para expirar (vazio = permanente): " days
+
+    if ! useradd -m -s /bin/false "$username"; then
+        printf '%b\n' "${RED}Falha ao criar o usuário.${NC}"
+        return
+    fi
+    if ! printf '%s:%s\n' "$username" "$password" | chpasswd; then
+        userdel -r "$username" >/dev/null 2>&1 || true
+        printf '%b\n' "${RED}Senha recusada pela política do sistema; usuário desfeito.${NC}"
+        return
+    fi
+
+    if [[ -n "$days" ]]; then
+        if [[ "$days" =~ ^[0-9]+$ ]] && (( days > 0 )); then
+            expiry=$(date -d "+${days} days" +%Y-%m-%d)
+            chage -E "$expiry" "$username"
+            printf '%b\n' "${GREEN}Usuário '$username' criado; expira em $expiry.${NC}"
+        else
+            userdel -r "$username" >/dev/null 2>&1 || true
+            printf '%b\n' "${RED}Quantidade de dias inválida; usuário desfeito.${NC}"
+        fi
+    else
+        chage -E -1 "$username"
+        printf '%b\n' "${GREEN}Usuário '$username' criado sem expiração.${NC}"
+    fi
+}
+
+list_users() {
+    local username expiry status expiry_epoch now_epoch
+    printf '%b\n' "${CYAN}--- Usuários SSH ---${NC}"
+    printf '%-20s %-24s %-14s\n' "USUÁRIO" "VALIDADE" "STATUS"
+    printf '%s\n' "--------------------------------------------------------------"
+    now_epoch=$(date +%s)
+
+    while IFS=: read -r username _ uid _; do
+        (( uid >= 1000 )) || continue
+        [[ "$username" != "nobody" ]] || continue
+        expiry=$(chage -l "$username" 2>/dev/null | awk -F: '/Account expires/ {sub(/^[[:space:]]+/, "", $2); print $2}')
+        status="Ativo"
+        if [[ -n "$expiry" && "$expiry" != "never" ]]; then
+            expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || printf '0')
+            if (( expiry_epoch > 0 && now_epoch > expiry_epoch )); then
+                status="Expirado"
+            fi
+        fi
+        printf '%-20s %-24s %-14s\n' "$username" "${expiry:-desconhecido}" "$status"
+    done </etc/passwd
+}
+
+remove_user() {
+    local username confirmation
+    printf '%b\n' "${CYAN}--- Remover usuário SSH ---${NC}"
+    read -r -p "Usuário para remover: " username
+    if ! valid_username "$username" || [[ "$username" == "root" ]]; then
+        printf '%b\n' "${RED}Usuário inválido ou protegido.${NC}"
+        return
+    fi
+    if ! id "$username" >/dev/null 2>&1; then
+        printf '%b\n' "${RED}Usuário não encontrado.${NC}"
+        return
+    fi
+    read -r -p "Confirme a remoção de '$username' [s/N]: " confirmation
+    if [[ "$confirmation" =~ ^[sS]$ ]]; then
+        userdel -r "$username"
+        printf '%b\n' "${GREEN}Usuário '$username' removido.${NC}"
+    else
+        echo "Operação cancelada."
+    fi
+}
+
+connected_users() {
+    printf '%b\n' "${CYAN}--- Usuários SSH conectados ---${NC}"
+    printf '%-18s %-10s %s\n' "USUÁRIO" "PID" "PROCESSO"
+    printf '%s\n' "--------------------------------------------------------------"
+    ps -eo user=,pid=,args= |
+        awk '$3 ~ /^sshd:/ && $1 != "root" {printf "%-18s %-10s %s\n", $1, $2, substr($0, index($0,$3))}'
+    printf '\nTotal de processos SSH de usuários: %s\n' "$(ssh_connections)"
+}
+
+show_logs() {
+    local option
+    printf '%b\n' "${CYAN}--- Logs do sistema ---${NC}"
+    echo "1. Logs do servidor BHTTP"
+    echo "2. Logs de autenticação SSH"
+    echo "3. Acompanhar logs BHTTP em tempo real"
+    echo "4. Logs de todos os serviços BTUN"
+    read -r -p "Selecione: " option
+    case "$option" in
+        1) journalctl -u "$SERVICE" -n 80 --no-pager ;;
+        2)
+            if [[ -f /var/log/auth.log ]]; then
+                grep -iE 'sshd.*(accepted|failed|invalid|disconnected)' /var/log/auth.log | tail -n 80
+            else
+                journalctl -u ssh -n 80 --no-pager
+            fi
+            ;;
+        3) journalctl -u "$SERVICE" -f ;;
+        4) journalctl -u btun-protocol -u btun-routing -u btun-bhttp -u btun-xhttp -n 100 --no-pager ;;
+        *) printf '%b\n' "${RED}Opção inválida.${NC}" ;;
+    esac
+}
+
+valid_port() {
+    [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 ))
+}
+
+manage_ports() {
+    local option port protocol
+    printf '%b\n' "${CYAN}--- Gerenciar portas ---${NC}"
+    echo "1. Abrir porta"
+    echo "2. Fechar porta"
+    echo "3. Ver regras do firewall"
+    echo "4. Ver portas escutando"
+    read -r -p "Selecione: " option
+
+    case "$option" in
+        3)
+            if command -v ufw >/dev/null 2>&1; then ufw status numbered; else iptables -S INPUT; fi
+            return
+            ;;
+        4) ss -lntup; return ;;
+        1|2) ;;
+        *) printf '%b\n' "${RED}Opção inválida.${NC}"; return ;;
+    esac
+
+    read -r -p "Número da porta: " port
+    if ! valid_port "$port"; then
+        printf '%b\n' "${RED}Porta inválida.${NC}"
+        return
+    fi
+    read -r -p "Protocolo [tcp/udp] (padrão tcp): " protocol
+    protocol=${protocol:-tcp}
+    if [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; then
+        printf '%b\n' "${RED}Protocolo inválido.${NC}"
+        return
+    fi
+
+    if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
+        if [[ "$option" == "1" ]]; then
+            ufw allow "$port/$protocol"
+        else
+            ufw --force delete allow "$port/$protocol"
+        fi
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        if [[ "$option" == "1" ]]; then
+            firewall-cmd --permanent --add-port="$port/$protocol"
+        else
+            firewall-cmd --permanent --remove-port="$port/$protocol"
+        fi
+        firewall-cmd --reload
+    else
+        printf '%b\n' "${YELLOW}UFW/firewalld não está ativo; nenhuma regra persistente foi alterada.${NC}"
+        return
+    fi
+    printf '%b\n' "${GREEN}Configuração aplicada para $port/$protocol.${NC}"
+}
+
+manage_service() {
+    local option
+    printf '%b\n' "${CYAN}--- Gerenciar serviço BHTTP ---${NC}"
+    echo "1. Iniciar"
+    echo "2. Parar"
+    echo "3. Reiniciar"
+    echo "4. Status"
+    echo "5. Habilitar no boot"
+    read -r -p "Opção: " option
+    case "$option" in
+        1) systemctl start "$SERVICE" ;;
+        2) systemctl stop "$SERVICE" ;;
+        3) systemctl restart "$SERVICE" ;;
+        4) systemctl status "$SERVICE" --no-pager ;;
+        5) systemctl enable "$SERVICE" ;;
+        *) printf '%b\n' "${RED}Opção inválida.${NC}"; return ;;
+    esac
+}
+
+uninstall_bhttp() {
+    local confirmation
+    printf '%b\n' "${RED}--- ATENÇÃO: desinstalação do BHTTP ---${NC}"
+    echo "Isso remove somente o BHTTP principal da porta 80. O núcleo BTUN não será removido."
+    read -r -p "Confirma a desinstalação? [s/N]: " confirmation
+    if [[ "$confirmation" =~ ^[sS]$ ]]; then
+        systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+        rm -f "/etc/systemd/system/$SERVICE" "$BINARY" "$COMMAND_PATH"
+        systemctl daemon-reload
+        printf '%b\n' "${GREEN}BHTTP principal removido.${NC}"
+        exit 0
+    fi
+    echo "Operação cancelada."
+}
+
+show_summary() {
+    printf 'BHTTP: %s\n' "$(service_state)"
+    systemctl --no-pager --full status "$SERVICE"
+}
+
+show_help() {
+    cat <<'EOF'
+Uso: bhttp [comando]
+
+Sem argumentos       abre o menu interativo
+status                mostra o status do BHTTP
+start                 inicia o BHTTP
+stop                  para o BHTTP
+restart               reinicia o BHTTP
+logs                  acompanha os logs do BHTTP
+help, --help, -h      mostra esta ajuda
+EOF
+}
+
+menu() {
+    local option
+    while true; do
+        clear
+        printf '%b\n' "${CYAN}============================================${NC}"
+        printf '%b\n' "${GREEN}          GERENCIADOR BHTTP PRÉ-ZTUN        ${NC}"
+        printf '      BHTTP STATUS: %b\n' "$(service_state)"
+        printf '%b\n' "${YELLOW}      CONECTADOS: $(ssh_connections) processos SSH${NC}"
+        printf '%b\n' "${YELLOW}      CPU: $(cpu_usage)%${NC}"
+        printf '%b\n' "${CYAN}============================================${NC}"
+        echo "  1. Adicionar usuário SSH"
+        echo "  2. Listar usuários SSH"
+        echo "  3. Remover usuário SSH"
+        echo "  4. Mostrar usuários conectados"
+        echo "  5. Ver logs de conexão"
+        echo "  6. Gerenciar portas (firewall)"
+        echo "  7. Gerenciar serviço BHTTP"
+        echo "  8. Desinstalar BHTTP"
+        echo "  9. Sair"
+        printf '%b\n' "${CYAN}============================================${NC}"
+        read -r -p "Selecione uma opção [1-9]: " option
+        case "$option" in
+            1) create_user; pause ;;
+            2) list_users; pause ;;
+            3) remove_user; pause ;;
+            4) connected_users; pause ;;
+            5) show_logs; pause ;;
+            6) manage_ports; pause ;;
+            7) manage_service; pause ;;
+            8) uninstall_bhttp ;;
+            9) clear; exit 0 ;;
+            *) printf '%b\n' "${RED}Opção inválida.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+require_root
+case "${1:-}" in
+    "") menu ;;
+    status) show_summary ;;
+    start|stop|restart) systemctl "$1" "$SERVICE" ;;
+    logs) journalctl -u "$SERVICE" -f ;;
+    help|-h|--help) show_help ;;
+    *) show_help >&2; exit 2 ;;
+esac

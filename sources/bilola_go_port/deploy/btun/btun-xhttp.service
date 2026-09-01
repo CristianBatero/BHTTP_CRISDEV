@@ -1,0 +1,22 @@
+[Unit]
+Description=BTUN isolated XHTTP TLS and HTTP2 stream transport
+After=network-online.target btun-protocol.service
+Wants=network-online.target
+Requires=btun-protocol.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/btun/bilola-xhttp-server \
+    --listen=0.0.0.0:7443 \
+    --target=127.0.0.1:7300 \
+    --tls-cert=/etc/bilola/tls/fullchain.pem \
+    --tls-key=/etc/bilola/tls/privkey.pem
+Restart=on-failure
+RestartSec=3
+User=root
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+
