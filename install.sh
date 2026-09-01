@@ -62,6 +62,7 @@ valid_port() {
 
 while (( $# > 0 )); do
     case "$1" in
+        "") shift ;; # ignora argumento vazio (ex.: vindo de update.sh)
         --ssh-port)
             (( $# >= 2 )) || die "--ssh-port requer um valor"
             SSH_PORT="$2"
