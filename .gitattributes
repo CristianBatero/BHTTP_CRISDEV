@@ -11,6 +11,7 @@
 *.txt     text eol=lf
 .gitignore     text eol=lf
 .gitattributes text eol=lf
+*.env          text eol=lf
 README.md      text eol=lf
 SHA256SUMS     text eol=lf
 
