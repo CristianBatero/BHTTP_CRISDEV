@@ -118,6 +118,9 @@ if find "$SOURCE_DIR" -iname '*ztun*' -print -quit | grep -q .; then
 fi
 
 echo "[3/8] Selecionando binários offline Linux/$ARCH..."
+chmod +x "$BIN_DIR"/bilola-server "$BIN_DIR"/bilola-xhttp-server \
+    "$BIN_DIR"/btun-server "$BIN_DIR"/bhttp-smoke \
+    "$BIN_DIR"/xhttp-smoke "$BIN_DIR"/certgen 2>/dev/null || true
 for binary in bilola-server bilola-xhttp-server btun-server \
     bhttp-smoke xhttp-smoke certgen; do
     [[ -x "$BIN_DIR/$binary" ]] || die "binário offline ausente: bin/$ARCH/$binary"
