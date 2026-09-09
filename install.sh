@@ -19,11 +19,13 @@ RUN_TESTS=1
 # Servicios opcionales (1 = activar, 0 = no activar).
 ENABLE_XHTTP="${ENABLE_XHTTP:-1}"
 ENABLE_BTUN_BHTTP="${ENABLE_BTUN_BHTTP:-1}"
-ENABLE_BTUN="${ENABLE_BTUN:-1}"
 ENABLE_BTUN_XHTTP="${ENABLE_BTUN_XHTTP:-1}"
-# BTUN nativo es requerido por BTUN sobre BHTTP y BTUN sobre XHTTP.
+# BTUN nativo solo se activa si alguno de sus modos dependientes está activo.
+# Si el usuario desactiva TLS (ENABLE_XHTTP=0) y BTUN_BHTTP=0, BTUN queda desactivado.
 if (( ENABLE_BTUN_BHTTP == 1 || ENABLE_BTUN_XHTTP == 1 )); then
     ENABLE_BTUN=1
+else
+    ENABLE_BTUN="${ENABLE_BTUN:-0}"
 fi
 
 usage() {
@@ -126,9 +128,12 @@ for binary in bilola-server bilola-xhttp-server btun-server \
     bhttp-smoke xhttp-smoke certgen; do
     [[ -x "$BIN_DIR/$binary" ]] || die "binário offline ausente: bin/$ARCH/$binary"
 done
-if ldd "$BIN_DIR/btun-server" 2>&1 | grep -q 'not found'; then
-    ldd "$BIN_DIR/btun-server" >&2 || true
-    die "o runtime PAM/glibc necessário ao BTUN não está instalado"
+# Verificar compatibilidad glibc/PAM del btun-server SOLO si BTUN va a usarse.
+if (( ENABLE_BTUN == 1 )); then
+    if ldd "$BIN_DIR/btun-server" 2>&1 | grep -q 'not found'; then
+        ldd "$BIN_DIR/btun-server" >&2 || true
+        die "o runtime PAM/glibc necessário ao BTUN não está instalado (requiere glibc >= 2.32). Desactiva BTUN con ENABLE_BTUN_BHTTP=0 en setup.sh o actualiza la VPS."
+    fi
 fi
 
 echo "[4/8] Salvando configuração anterior..."

@@ -131,10 +131,14 @@ if [[ -t 0 || -e /dev/tty ]]; then
     export BHTTP_PORT
 
     # TLS / XHTTP
-    _ans_tls="$(_read_val "¿Activar TLS/XHTTP? (s/n)" "s")"
+    _ans_tls="$(_read_val "¿Activar TLS/XHTTP y BTUN? (s/n) — requiere glibc >= 2.32" "s")"
     if [[ "$_ans_tls" =~ ^[Nn0]$ ]]; then
+        # Solo BHTTP básico: desactivar todo lo que depende de glibc >= 2.32
         export ENABLE_XHTTP=0
         export ENABLE_BTUN_XHTTP=0
+        export ENABLE_BTUN_BHTTP=0
+        export ENABLE_BTUN=0
+        printf "${YE}[setup]${C} Modo solo-BHTTP: TLS, BTUN y XHTTP desactivados.\n"
     fi
 
     printf "\n"
