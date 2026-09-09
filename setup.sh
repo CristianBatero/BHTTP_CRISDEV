@@ -27,7 +27,33 @@ warn() { printf "${YE}[setup]${C} %s\n" "$*" >&2; }
 die()  { printf "${RE}[setup ERROR]${C} %s\n" "$*" >&2; exit 1; }
 
 (( EUID == 0 )) || die "Ejecuta como root:  sudo bash setup.sh  (o directo como root)"
-for cmd in git unzip sha256sum systemctl install; do
+
+# Auto-instalar dependencias básicas si faltan en la VPS
+install_deps() {
+    local missing=()
+    for cmd in git sha256sum systemctl install; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+        log "Instalando dependencias del sistema (${missing[*]})..."
+        if command -v apt-get >/dev/null 2>&1; then
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -y && apt-get install -y git coreutils systemd iptables iproute2
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y git coreutils systemd iptables iproute
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y git coreutils systemd iptables iproute
+        elif command -v apk >/dev/null 2>&1; then
+            apk add --no-cache git coreutils iptables iproute2
+        fi
+    fi
+}
+install_deps
+
+for cmd in git sha256sum systemctl install; do
     command -v "$cmd" >/dev/null 2>&1 || die "Comando obligatorio ausente: $cmd"
 done
 
