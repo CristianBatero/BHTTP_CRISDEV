@@ -1,49 +1,52 @@
-# BTUN pré-ZTUN 1.0.44 — instalador AIO (offline ou via GIT)
+# BTUN pré-ZTUN 1.0.44 — Instalador AIO (offline o vía GIT)
 
-Este pacote instala localmente BHTTP, SSH_XHTTP e BTUN, sem ZTUN e sem baixar
-arquivos da internet (os binários Linux AMD64 e ARM64, os testes, o gerador de
-certificado, o menu `bhttp` e a source completa usada na compilação já estão
-inclusos).
+Este paquete instala localmente BHTTP, SSH_XHTTP y BTUN, sin ZTUN y sin descargar
+archivos de internet (los binarios Linux AMD64 y ARM64, las pruebas, el generador de
+certificado, el menú `bhttp` y el código fuente completo utilizado en la compilación
+ya están incluidos).
 
-Ele também é o repositório oficial de distribuição/atualização via **GIT**:
-o `setup.sh` clona (ou atualiza) o pacote e o `update.sh` faz `git pull` +
-reinstala, servindo como ponte para novas versões do motor/servidor.
+También es el repositorio oficial de distribución/actualización vía **GIT**:
+el `setup.sh` clona (o actualiza) el paquete y el `update.sh` hace `git pull` +
+reinstala, sirviendo como puente para nuevas versiones del motor/servidor.
 
-## Instalação pelo GIT (recomendado) — uma linha
-
-```bash
-wget https://raw.githubusercontent.com/CristianBatero/BHTTP_CRISDEV/main/setup.sh \
-    && chmod +x setup.sh && sudo bash setup.sh
-```
-
-O `setup.sh` baixa/atualiza o pacote para `/opt/bhttp-crisdev` (via `git clone`
-ou `git pull`), verifica o `SHA256SUMS`, repara permissões e executa o
-`install.sh` com detecção automática de IP/arquitetura.
-
-Sem perguntas (opcional):
+## Instalación vía GIT (recomendado) — una sola línea
 
 ```bash
-SETUP_SSH_PORT=22 SETUP_USERNAME=cliente SETUP_PASSWORD='sua-senha' sudo bash setup.sh
+curl -fsSL "https://raw.githubusercontent.com/CristianBatero/BHTTP_CRISDEV/main/setup.sh?v=$(date +%s)" -o setup.sh && bash setup.sh
 ```
 
-## Atualização (update.sh)
+El `setup.sh` descarga/actualiza el paquete en `/opt/bhttp-crisdev` (vía `git clone`
+o `git pull`), verifica el `SHA256SUMS`, corrige los permisos y ejecuta el
+`install.sh` con detección automática de IP/arquitectura.
 
-Quando houver nova versão do motor/servidor publicada no repositório:
+Durante la instalación el script te preguntará:
+- **Puerto BHTTP** — presiona `[ENTER]` para usar el valor por defecto (`7080`)
+- **TLS/XHTTP** — presiona `[ENTER]` para activarlo, `n` para desactivarlo
+
+Modo sin preguntas (no interactivo):
+
+```bash
+BHTTP_PORT=7080 ENABLE_XHTTP=1 sudo bash setup.sh
+```
+
+## Actualización (update.sh)
+
+Cuando haya una nueva versión del motor/servidor publicada en el repositorio:
 
 ```bash
 sudo bash /opt/bhttp-crisdev/update.sh
 ```
 
-O `update.sh` faz `git pull --ff-only`, valida o `SHA256SUMS` e re-instala
-(faz backup da configuração atual e reinicia os serviços sem apagar suas
-credenciais manuais).
+El `update.sh` hace `git pull --ff-only`, valida el `SHA256SUMS` y re-instala
+(hace backup de la configuración actual y reinicia los servicios sin borrar tus
+credenciales manuales).
 
-> Nota: para trocar MANUALMENTE a rama instalada (ex.: de `main` para outra),
-> rode `sudo bash /opt/bhttp-crisdev/setup.sh`.
+> **Nota:** para cambiar MANUALMENTE la rama instalada (ej.: de `main` a otra),
+> ejecuta `sudo bash /opt/bhttp-crisdev/setup.sh`.
 
-## Instalação offline (arquivo ZIP)
+## Instalación offline (archivo ZIP)
 
-Envie o ZIP para a VPS, entre como `root` e execute:
+Envía el ZIP a la VPS, entra como `root` y ejecuta:
 
 ```bash
 mkdir -p /root/btun-offline
@@ -52,64 +55,59 @@ unzip /root/BTUN-pre-ZTUN-OFFLINE-AIO-v1.0.44.zip
 bash install.sh
 ```
 
-Não use `--host`: o instalador detecta automaticamente o endereço da própria
-máquina. Para trocar apenas a porta SSH local, use:
+No uses `--host`: el instalador detecta automáticamente la dirección de la propia
+máquina. Para cambiar solo el puerto SSH local, usa:
 
 ```bash
 bash install.sh --ssh-port 22
 ```
 
-Portas padrão:
+Puertos por defecto:
 
-- `80/tcp`: BHTTP para SSH
-- `443/tcp`: SSH_XHTTP e BTUN compartilhados por TLS
-- `7080/tcp`: BTUN sobre BHTTP
-- `7300/tcp` e `7300/udp`: BTUN nativo
-- `7443/tcp`: BTUN sobre XHTTP dedicado
+| Puerto       | Protocolo | Uso                          |
+|-------------|-----------|------------------------------|
+| `80/tcp`    | TCP       | BHTTP para SSH               |
+| `443/tcp`   | TCP       | SSH_XHTTP y BTUN compartidos por TLS |
+| `7080/tcp`  | TCP       | BTUN sobre BHTTP             |
+| `7300/tcp`  | TCP       | BTUN nativo                  |
+| `7300/udp`  | UDP       | BTUN nativo                  |
+| `7443/tcp`  | TCP       | BTUN sobre XHTTP dedicado    |
 
-Após instalar, execute `bhttp` para abrir o menu ou `bhttp status` para consultar
-o serviço principal.
+Después de instalar, ejecuta `bhttp` para abrir el menú o `bhttp status` para
+consultar el servicio principal.
 
-## Requisitos locais da VPS
+## Requisitos de la VPS
 
-O pacote não precisa de internet, compilador, Go nem OpenSSL. A imagem base da VPS
-precisa ter Linux AMD64 ou ARM64, `systemd`, OpenSSH, PAM/glibc, `iproute2`,
-`iptables`, `/dev/net/tun` e o comando `unzip`. Esses componentes normalmente já
-existem em Ubuntu Server 22.04/24.04 e Debian 12 com OpenSSH instalado.
+El paquete no necesita internet, compilador, Go ni OpenSSL. La imagen base de la VPS
+necesita Linux AMD64 o ARM64, `systemd`, OpenSSH, PAM/glibc, `iproute2`,
+`iptables` y `/dev/net/tun`. Estos componentes normalmente ya existen en
+Ubuntu Server 22.04/24.04 y Debian 12 con OpenSSH instalado.
 
-O instalador verifica tudo antes de alterar os serviços. Se algo estiver ausente,
-ele termina com uma mensagem clara; como a instalação é offline, o componente de
-sistema deve ser incluído previamente na imagem da VPS.
+> El `setup.sh` instala automáticamente las dependencias básicas (`git`, `iptables`,
+> `iproute2`) si detecta que faltan, usando `apt-get`, `dnf`, `yum` o `apk`.
 
-## Conteúdo
+El instalador verifica todo antes de modificar los servicios. Si algo está ausente,
+termina con un mensaje claro.
 
-- `bin/amd64/`: binários pré-compilados para x86-64
-- `bin/arm64/`: binários pré-compilados para AArch64
-- `sources/bilola_go_port/`: source completa da versão pré-ZTUN 1.0.44
-- `tools/certgen/main.go`: source do gerador de certificado incorporado
-- `bhttp-menu`: menu local de gerenciamento
-- `setup.sh`: bootstrap de instalação/atualização via GIT
-- `update.sh`: atualizador automático via GIT
-- `SHA256SUMS`: hashes para verificar todos os arquivos do pacote
+## Contenido del paquete
 
-Para conferir a integridade após descompactar:
+| Archivo/Carpeta | Descripción |
+|----------------|-------------|
+| `bin/amd64/` | Binarios pre-compilados para x86-64 |
+| `bin/arm64/` | Binarios pre-compilados para AArch64 |
+| `sources/bilola_go_port/` | Código fuente completo de la versión pré-ZTUN 1.0.44 |
+| `tools/certgen/main.go` | Fuente del generador de certificado incorporado |
+| `bhttp-menu` | Menú local de gestión |
+| `setup.sh` | Bootstrap de instalación/actualización vía GIT |
+| `update.sh` | Actualizador automático vía GIT |
+| `ports.env` | Configuración de puertos por defecto |
+| `SHA256SUMS` | Hashes para verificar todos los archivos del paquete |
+
+Para verificar la integridad del paquete:
 
 ```bash
 sha256sum -c SHA256SUMS
 ```
 
-O instalador salva a configuração existente em
-`/root/bhttp-preztun-backup-AAAAMMDD-HHMMSS` antes de substituí-la.
-
-## Instalação rápida e sem perguntas
-
-Se preferir um passo único e não interativo, use o `setup.sh`: ele verifica a
-integridade, repara as permissões dos binários, executa o `install.sh`
-(deteção automática de IP/arquitetura), garante o login por senha no SSH
-(sem exigir chave/key) e cria um usuário opcional sem prompts.
-
-```bash
-sudo bash setup.sh
-# opcional, sem perguntas:
-SETUP_SSH_PORT=22 SETUP_USERNAME=cliente SETUP_PASSWORD='sua-senha' sudo bash setup.sh
-```
+El instalador guarda la configuración existente en
+`/root/bhttp-preztun-backup-AAAAMMDD-HHMMSS` antes de reemplazarla.
