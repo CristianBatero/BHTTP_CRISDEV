@@ -105,8 +105,44 @@ if [[ -f "$INSTALL_DIR/ports.env" ]]; then
     source "$INSTALL_DIR/ports.env"
     set +a
 fi
+
+# Preguntar puerto BHTTP y TLS si la terminal es interactiva
+if [[ -t 0 || -e /dev/tty ]]; then
+    _read_val() {
+        local msg="$1" def="$2" val=""
+        if [[ -t 0 ]]; then
+            read -r -p "$(printf "${CY}%s${C} [default: ${GR}%s${C}]: " "$msg" "$def")" val || true
+        else
+            read -r -p "$(printf "${CY}%s${C} [default: ${GR}%s${C}]: " "$msg" "$def")" val </dev/tty || true
+        fi
+        echo "${val:-$def}"
+    }
+
+    printf "\n${CY}===========================================================${C}\n"
+    printf "${GR}              Configuración del Servicio BHTTP              ${C}\n"
+    printf "         (Presiona ${YE}[ENTER]${C} para usar el valor por defecto)\n"
+    printf "${CY}===========================================================${C}\n\n"
+
+    # Puerto BHTTP
+    _new_bhttp="$(_read_val "Puerto para servicio BHTTP" "${BHTTP_PORT:-7080}")"
+    if [[ "$_new_bhttp" =~ ^[0-9]+$ ]] && (( _new_bhttp >= 1 && _new_bhttp <= 65535 )); then
+        BHTTP_PORT="$_new_bhttp"
+    fi
+    export BHTTP_PORT
+
+    # TLS / XHTTP
+    _ans_tls="$(_read_val "¿Activar TLS/XHTTP? (s/n)" "s")"
+    if [[ "$_ans_tls" =~ ^[Nn0]$ ]]; then
+        export ENABLE_XHTTP=0
+        export ENABLE_BTUN_XHTTP=0
+    fi
+
+    printf "\n"
+fi
+
 log "Ejecutando install.sh del paquete..."
 bash "$INSTALL_DIR/install.sh" "$@"
+
 
 cat <<EOF
 
